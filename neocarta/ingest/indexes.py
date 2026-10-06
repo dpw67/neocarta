@@ -116,13 +116,33 @@ def create_name_range_index(
     dict
         The summary of the index created.
     """
-    name_index_query = f"""
-CREATE INDEX {node_label.lower() + "_name_index"} IF NOT EXISTS
+    return create_range_index(neo4j_driver, node_label, "name", database_name)
+
+
+def create_range_index(
+    neo4j_driver: Driver,
+    node_label: str,
+    property_name: str,
+    database_name: str = "neo4j",
+) -> dict:
+    """Create an idempotent range index on a node property.
+
+    Args:
+        neo4j_driver: Driver connected to the target graph.
+        node_label: Node label to index.
+        property_name: Property to index.
+        database_name: Target Neo4j database.
+
+    Returns:
+        Neo4j schema-write counters.
+    """
+    index_query = f"""
+CREATE INDEX {node_label.lower()}_{property_name.lower()}_index IF NOT EXISTS
     FOR (n:{node_label})
-    ON (n.name)
+    ON (n.{property_name})
 """
     _, summary, _ = neo4j_driver.execute_query(
-        query_=name_index_query,
+        query_=index_query,
         routing_=RoutingControl.WRITE,
         database_=database_name,
     )

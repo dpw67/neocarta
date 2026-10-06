@@ -98,6 +98,7 @@ class DatabricksSchemaExtractor:
         catalog: str,
         *,
         value_sample_limit: int = 10,
+        sample_cardinality_threshold: int = 0,
     ) -> None:
         """Initialize the extractor with an injected connection and target catalog."""
         if connection is None:
@@ -127,6 +128,13 @@ class DatabricksSchemaExtractor:
                 "value_sample_limit must be a non-negative integer.",
                 suggestion="Pass value_sample_limit=0 to disable value sampling.",
             )
+        if (
+            not isinstance(sample_cardinality_threshold, int)
+            or isinstance(sample_cardinality_threshold, bool)
+            or sample_cardinality_threshold < 0
+        ):
+            raise ConfigError("sample_cardinality_threshold must be a non-negative integer.")
+        self.sample_cardinality_threshold = sample_cardinality_threshold
         self.connection = connection
         self.catalog = catalog
         self.value_sample_limit = value_sample_limit
@@ -489,6 +497,8 @@ ORDER BY fk.table_name, fk.constraint_name, fk.ordinal_position
 
         Skips complex / non-groupable column types (ARRAY/MAP/STRUCT/BINARY/
         VARIANT). Returns an empty frame when the effective limit is ``<= 0``.
+        When a cardinality threshold is configured, first filters columns using
+        ``approx_count_distinct`` and samples only those below the threshold.
 
         Parameters
         ----------
@@ -538,7 +548,7 @@ ORDER BY fk.table_name, fk.constraint_name, fk.ordinal_position
                 ", ".join(_NON_SAMPLEABLE_TYPES),
             )
 
-        select_clauses = []
+        sample_columns = []
         for col in column_names:
             if have_types:
                 col_data_type = column_info[
@@ -548,16 +558,36 @@ ORDER BY fk.table_name, fk.constraint_name, fk.ordinal_position
                     data_type = str(col_data_type.iloc[0]).upper()
                     if data_type.startswith(_NON_SAMPLEABLE_TYPES):
                         continue
-            quoted = _quote_identifier(col)
-            select_clauses.append(f"slice(collect_set({quoted}), 1, {limit}) AS {quoted}")
+            sample_columns.append(col)
 
-        if not select_clauses:
+        if not sample_columns:
             return _empty_value_frame()
 
         relation = (
             f"{_quote_identifier(self.catalog)}."
             f"{_quote_identifier(schema)}.{_quote_identifier(table_name)}"
         )
+        if self.sample_cardinality_threshold:
+            cardinality_clauses = [
+                f"approx_count_distinct({_quote_identifier(col)}) AS {_quote_identifier(col)}"
+                for col in sample_columns
+            ]
+            cardinalities = self._run_query(
+                f"SELECT {', '.join(cardinality_clauses)} FROM {relation}"
+            )
+            if cardinalities.empty:
+                raise ConfigError("Column cardinality query returned no aggregate row.")
+            sample_columns = [
+                col
+                for col in sample_columns
+                if cardinalities.iloc[0][col] < self.sample_cardinality_threshold
+            ]
+            if not sample_columns:
+                return _empty_value_frame()
+        select_clauses = [
+            f"slice(collect_set({_quote_identifier(col)}), 1, {limit}) AS {_quote_identifier(col)}"
+            for col in sample_columns
+        ]
         df = self._run_query(f"SELECT {', '.join(select_clauses)} FROM {relation}")
 
         result = df.melt(var_name="column_name", value_name="unique_value")

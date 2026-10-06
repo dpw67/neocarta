@@ -29,9 +29,11 @@ live behind the optional `databricks` extra:
 pip install neocarta[databricks]
 ```
 
-A Spark-based schema connector (using Spark SQL and the Neo4j Spark Connector)
-remains a separate, future option and would ship under its own extra so this
-warehouse-only package never pulls Spark.
+The optional [Spark schema connector](spark/README.md) uses Spark SQL and the
+Neo4j Spark Connector. It supports catalog-scale ingestion, inline embeddings,
+an embedding cache, richer retrieval metadata, and sampled-value reconciliation.
+Install `neocarta[databricks-spark]` for this path. The warehouse and tag
+connectors remain available through `neocarta[databricks]`.
 
 ## Connector type
 
@@ -110,6 +112,21 @@ connection.close()  # the caller owns the connection's lifecycle
 ```
 
 Pass `value_sample_limit=0` to skip value sampling entirely (see *Known issues*).
+
+Two optional controls adapt features from the Spark connector:
+
+- `sample_cardinality_threshold=50` samples only groupable columns whose
+  approximate distinct count is below 50. The default `0` disables this filter
+  and preserves existing sampling behavior. Enabling it adds a cardinality query
+  before sampling each table.
+- `overwrite_existing=True` refreshes metadata on existing nodes through the
+  shared loader. The default is `False`. Refresh leaves existing embeddings in
+  place, so regenerate affected vectors separately when their input text changes.
+  It does not remove dropped source objects or reconcile old warehouse samples.
+
+After ingestion, [foreign-key inference](../../enrichment/foreign_keys/README.md)
+can propose joins from schema metadata when declared keys are sparse. It is a
+separate enrichment and never marks a heuristic relationship as a declared key.
 
 ### Environment variables
 

@@ -9,7 +9,12 @@ def _normalize(s: str) -> str:
     return s.lower().replace(" ", "_").replace("-", "_")
 
 
-def _hash_value(value: Any) -> str:
+def compose_id(*parts: str) -> str:
+    """Compose a normalized, dot-joined identifier from raw segments."""
+    return ".".join(_normalize(part) for part in parts)
+
+
+def hash_value_suffix(value: Any) -> str:
     """Hash an ID value segment: the first 32 hex chars of its MD5 digest.
 
     Used for the trailing segment of value-bearing ids so case- and
@@ -148,7 +153,7 @@ def generate_value_id(database: str, schema: str, table: str, column: str, value
     >>> generate_value_id("my-project", "sales", "orders", "status", "completed")
     'my_project.sales.orders.status.9cdfb439c7876e703e307864c9167a15'
     """
-    value_hash = _hash_value(value)
+    value_hash = hash_value_suffix(value)
     return f"{_normalize(database)}.{_normalize(schema)}.{_normalize(table)}.{_normalize(column)}.{value_hash}"
 
 
@@ -290,7 +295,7 @@ def generate_governance_tag_value_id(source: str, key: str, value: str) -> str:
     >>> generate_governance_tag_value_id("aws:us-west-2:abc-123", "sensitivity", "pii")
     'aws:us_west_2:abc_123.sensitivity.1eae74adfc325f04a8506be8bd11c67a'
     """
-    value_hash = _hash_value(value)
+    value_hash = hash_value_suffix(value)
     return f"{_normalize(source)}.{_normalize(key)}.{value_hash}"
 
 
@@ -327,7 +332,7 @@ def generate_governance_tag_instance_id(source_id: str, key: str, value: str) ->
     """
     # Value is content-hashed (see generate_governance_tag_value_id) so case/separator-
     # distinct values don't collapse; the source_id is a pre-built, already-normalized id.
-    value_hash = _hash_value(value)
+    value_hash = hash_value_suffix(value)
     return f"{source_id}.{_normalize(key)}.{value_hash}"
 
 

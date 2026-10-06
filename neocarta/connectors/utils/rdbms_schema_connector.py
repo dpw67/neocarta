@@ -157,7 +157,7 @@ class RdbmsSchemaConnector:
         log_transform_counts(self._logger, self.transformer, _TRANSFORM_COUNTS)
         self._transformed = True
 
-    def load(self) -> None:
+    def load(self, *, overwrite_existing: bool = False) -> None:
         """Load transformed metadata into Neo4j.
 
         Raises:
@@ -171,11 +171,12 @@ class RdbmsSchemaConnector:
                 suggestion="Call connector.extract() and connector.transform() first.",
             )
         self._logger.info("Loading %s schema metadata into Neo4j...", self._DISPLAY_NAME)
-        self.loader.load_database_nodes(self.transformer.database_nodes)
-        self.loader.load_schema_nodes(self.transformer.schema_nodes)
-        self.loader.load_table_nodes(self.transformer.table_nodes)
-        self.loader.load_column_nodes(self.transformer.column_nodes)
-        self.loader.load_value_nodes(self.transformer.value_nodes)
+        write_options = {"overwrite_existing": True} if overwrite_existing else {}
+        self.loader.load_database_nodes(self.transformer.database_nodes, **write_options)
+        self.loader.load_schema_nodes(self.transformer.schema_nodes, **write_options)
+        self.loader.load_table_nodes(self.transformer.table_nodes, **write_options)
+        self.loader.load_column_nodes(self.transformer.column_nodes, **write_options)
+        self.loader.load_value_nodes(self.transformer.value_nodes, **write_options)
 
         self.loader.load_has_schema_relationships(self.transformer.has_schema_relationships)
         self.loader.load_has_table_relationships(self.transformer.has_table_relationships)

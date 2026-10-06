@@ -46,6 +46,12 @@ class DatabricksSchemaConnector(RdbmsSchemaConnector):
     value_sample_limit : int, default 10
         Distinct sample values to read per groupable column. ``0`` disables value
         sampling (no table-data reads, so no ``:Value`` nodes / ``HAS_VALUE`` edges).
+    sample_cardinality_threshold : int, default 0
+        Sample only columns below this approximate distinct count. ``0`` keeps
+        the existing sampling behavior without an extra cardinality query.
+    overwrite_existing : bool, default False
+        Refresh metadata on existing nodes. Existing embeddings are preserved;
+        regenerate them separately when their input text changes.
     """
 
     _DISPLAY_NAME = "Databricks"
@@ -58,6 +64,8 @@ class DatabricksSchemaConnector(RdbmsSchemaConnector):
         database_name: str = "neo4j",
         *,
         value_sample_limit: int = 10,
+        sample_cardinality_threshold: int = 0,
+        overwrite_existing: bool = False,
     ) -> None:
         """Initialize the Databricks schema connector."""
         if connection is None:
@@ -77,15 +85,27 @@ class DatabricksSchemaConnector(RdbmsSchemaConnector):
             )
 
         self.catalog = catalog
+        self.overwrite_existing = overwrite_existing
         self._init_pipeline(
             connection=connection,
             neo4j_driver=neo4j_driver,
             database_name=database_name,
             extractor=DatabricksSchemaExtractor(
-                connection, catalog, value_sample_limit=value_sample_limit
+                connection,
+                catalog,
+                value_sample_limit=value_sample_limit,
+                sample_cardinality_threshold=sample_cardinality_threshold,
             ),
             transformer=DatabricksSchemaTransformer(),
         )
+
+    def load(self) -> None:
+        """Load schema metadata, optionally refreshing existing node properties.
+
+        Refresh preserves embeddings and does not delete dropped schema objects.
+        Changed embedding inputs require a separate re-embedding operation.
+        """
+        super().load(overwrite_existing=self.overwrite_existing)
 
     def _resolve_schema(self, schema: str) -> str:
         """Validate the schema identifier (reject a backtick that could break quoting).

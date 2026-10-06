@@ -1,5 +1,15 @@
 # Changelog of neocarta library and MCP server
 
+## Unreleased
+
+### Added
+- Optional `DatabricksSparkSchemaConnector` alongside the existing warehouse and tag connectors, with the `databricks-spark` extra, distributed Neo4j writes, inline `ai_query` embeddings, dimension validation, a cross-run embedding cache, batch failure controls, richer schema metadata, and sampled-value reconciliation. Ported selectively from `add-databricks-connector-from-dbxcarta`.
+- Spark-independent foreign-key inference over the schema graph hierarchy, with heuristic scores and provenance that preserve declared relationships.
+- Optional `sample_cardinality_threshold` and `overwrite_existing` controls on the Databricks warehouse connector. Existing defaults are preserved.
+
+### Fixed
+- Inline Spark embedding input now matches the shared `name | type | description` composition, including nodes without descriptions. Cache reuse checks vector dimensions; Spark database platform/service values match the warehouse connector.
+
 
 ## v0.8.1
 
